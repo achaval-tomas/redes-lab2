@@ -44,7 +44,12 @@ class Connection(object):
         self.remaining_data = ""
 
         while True:
-            data = self.socket.recv(BUFFER_SIZE).decode('ascii')
+            try:
+                data = self.socket.recv(BUFFER_SIZE).decode('ascii')
+            except UnicodeDecodeError:
+                print("ERROR: message contains invalid ascii.")
+                return None
+
             if len(data) == 0:
                 return None
 
@@ -89,3 +94,5 @@ class Connection(object):
 
             if not self.process_line(line):
                 print("ERRRRRRROOROROROROROROROROR")
+
+        print("Terminating connection with client.")
