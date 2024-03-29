@@ -28,22 +28,21 @@ class Connection(object):
 
     def recv_line(self):
         self.buffer = ""
-        read_cr = False
+        expecting_newline = False
         while True:
             data = self.socket.recv(1).decode('ascii')
             if len(data) == 0:
                 return False
-            
+
             assert len(data) == 1
             [data] = data
-            
+
             self.buffer += data
 
-            if data == EOL[0]:
-                read_cr = True
-            elif data == EOL[1]:
-                return read_cr
-
+            if expecting_newline:
+                return data == EOL[1]
+            elif data == EOL[0]:
+                expecting_newline = True
 
     def quit_handler(self, args):
         print("QUITTY")
