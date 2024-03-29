@@ -19,20 +19,32 @@ class Connection(object):
         self.dir = directory
         self.buffer = ""
 
-    def recv(self):
+    def recv_line(self):
+        self.buffer = ""
+        read_cr = False
         while True:
-            data = self.socket.recv(1024).decode('ascii')
+            data = self.socket.recv(1).decode('ascii')
+            if len(data) == 0:
+                return False
+            
+            assert len(data) == 1
+            [data] = data
+            
             self.buffer += data
 
-            if data[-2:] == EOL:
-                break
+            if data == EOL[0]:
+                read_cr = True
+            elif data == EOL[1]:
+                return read_cr
+
 
     def quit(self):
         pass
 
 
     def handle(self):
-        self.recv()
+        while self.recv_line():
+            print(self.buffer)
         
-        print(f'Buffer length: {len(self.buffer)}')
-        print(self.buffer)
+        # print(f'Buffer length: {len(self.buffer)}')
+        # print(self.buffer)
