@@ -43,8 +43,8 @@ class Connection(object):
 
 
     def handle(self):
+        """
+        Atiende eventos de la conexión hasta que termina.
+        """
         while self.recv_line():
             print(self.buffer)
-        
-        # print(f'Buffer length: {len(self.buffer)}')
-        # print(self.buffer)
