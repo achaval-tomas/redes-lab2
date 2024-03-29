@@ -17,9 +17,22 @@ class Connection(object):
     def __init__(self, socket, directory):
         self.socket = socket
         self.dir = directory
+        self.buffer = ""
+
+    def recv(self):
+        while True:
+            data = self.socket.recv(1024).decode('ascii')
+            self.buffer += data
+
+            if data[-2:] == EOL:
+                break
+
+    def quit(self):
+        pass
+
 
     def handle(self):
-        """
-        Atiende eventos de la conexión hasta que termina.
-        """
-        pass
+        self.recv()
+        
+        print(f'Buffer length: {len(self.buffer)}')
+        print(self.buffer)
