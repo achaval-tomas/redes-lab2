@@ -3,10 +3,12 @@
 # Copyright 2014 Carlos Bederián
 # $Id: connection.py 455 2011-05-01 00:32:09Z carlos $
 
-import socket
-from constants import *
 from base64 import b64encode
+from constants import EOL
 import re
+import socket as s
+from typing import Callable
+
 
 class Connection(object):
     """
@@ -15,7 +17,13 @@ class Connection(object):
     que termina la conexión.
     """
 
-    def __init__(self, socket, directory):
+    socket: s.socket
+    dir: str
+    buffer: str
+    quit: bool
+    commands: list[tuple[str, Callable[[list[str]], None]]]
+
+    def __init__(self, socket: s.socket, directory: str):
         self.socket = socket
         self.dir = directory
         self.buffer = ""
@@ -24,7 +32,6 @@ class Connection(object):
             (r"^get_slice (\d+) (\d+) (\d+)\r\n$", self.get_slice_handler),
             (r"^quit\r\n$", self.quit_handler)
         ]
-
 
     def recv_line(self):
         self.buffer = ""
@@ -48,10 +55,8 @@ class Connection(object):
         print("QUITTY")
         self.quit = True
 
-
     def get_slice_handler(self, args):
         pass
-
 
     def process_line(self):
         for (pattern, handler) in self.commands:
@@ -62,7 +67,6 @@ class Connection(object):
 
         return False
 
-
     def handle(self):
         """
         Atiende eventos de la conexión hasta que termina.
@@ -70,4 +74,3 @@ class Connection(object):
         while self.recv_line() and not self.quit:
             if not self.process_line():
                 print("ERRRRRRROOROROROROROROROROR")
-
