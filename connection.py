@@ -9,6 +9,8 @@ import re
 import socket as s
 from typing import Callable
 
+BUFFER_SIZE = 1024
+
 
 class Connection(object):
     """
@@ -19,37 +21,46 @@ class Connection(object):
 
     socket: s.socket
     dir: str
-    buffer: str
-    quit: bool
     commands: list[tuple[str, Callable[[list[str]], None]]]
+
+    # the remaining data after calling recv_line()
+    remaining_data: str
+
+    quit: bool
 
     def __init__(self, socket: s.socket, directory: str):
         self.socket = socket
         self.dir = directory
-        self.buffer = ""
-        self.quit = False
         self.commands = [
             (r"^get_slice (\d+) (\d+) (\d+)\r\n$", self.get_slice_handler),
             (r"^quit\r\n$", self.quit_handler)
         ]
+        self.remaining_data = ""
+        self.quit = False
 
-    def recv_line(self):
-        self.buffer = ""
-        expecting_newline = False
+    def recv_line(self) -> str | None:
+        # Start the line with the remaining data of the previous recv()
+        line = self.remaining_data
+        self.remaining_data = ""
+
         while True:
-            data = self.socket.recv(1).decode('ascii')
+            data = self.socket.recv(BUFFER_SIZE).decode('ascii')
             if len(data) == 0:
-                return False
+                return None
 
-            assert len(data) == 1
-            [data] = data
+            eol_index = data.find(EOL)
+            if eol_index == -1:
+                # No EOL found, keep receiving
+                line += data
+                continue
 
-            self.buffer += data
+            next_line_index = eol_index + len(EOL)
 
-            if expecting_newline:
-                return data == EOL[1]
-            elif data == EOL[0]:
-                expecting_newline = True
+            line += data[0:next_line_index]
+            # Set leftovers as the remaining data
+            self.remaining_data = data[next_line_index:]
+
+            return line
 
     def quit_handler(self, args):
         print("QUITTY")
@@ -58,9 +69,9 @@ class Connection(object):
     def get_slice_handler(self, args):
         pass
 
-    def process_line(self):
+    def process_line(self, line: str):
         for (pattern, handler) in self.commands:
-            match = re.search(pattern, self.buffer)
+            match = re.search(pattern, line)
             if match is not None:
                 handler(match.groups())
                 return True
@@ -71,6 +82,10 @@ class Connection(object):
         """
         Atiende eventos de la conexión hasta que termina.
         """
-        while self.recv_line() and not self.quit:
-            if not self.process_line():
+        while not self.quit:
+            line = self.recv_line()
+            if line is None:
+                break
+
+            if not self.process_line(line):
                 print("ERRRRRRROOROROROROROROROROR")
