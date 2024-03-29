@@ -1,4 +1,4 @@
-Laboratorio 2: Aplicación Servidor
+# Laboratorio 2: Aplicación Servidor
 
 Cátedra de Redes y Sistemas Distribuidos
 
