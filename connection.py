@@ -6,6 +6,7 @@
 import socket
 from constants import *
 from base64 import b64encode
+import re
 
 class Connection(object):
     """
@@ -18,6 +19,12 @@ class Connection(object):
         self.socket = socket
         self.dir = directory
         self.buffer = ""
+        self.quit = False
+        self.commands = [
+            (r"^get_slice (\d+) (\d+) (\d+)\r\n$", self.get_slice_handler),
+            (r"^quit\r\n$", self.quit_handler)
+        ]
+
 
     def recv_line(self):
         self.buffer = ""
@@ -38,13 +45,30 @@ class Connection(object):
                 return read_cr
 
 
-    def quit(self):
+    def quit_handler(self, args):
+        print("QUITTY")
+        self.quit = True
+
+
+    def get_slice_handler(self, args):
         pass
+
+
+    def process_line(self):
+        for (pattern, handler) in self.commands:
+            match = re.search(pattern, self.buffer)
+            if match is not None:
+                handler(match.groups())
+                return True
+
+        return False
 
 
     def handle(self):
         """
         Atiende eventos de la conexión hasta que termina.
         """
-        while self.recv_line():
-            print(self.buffer)
+        while self.recv_line() and not self.quit:
+            if not self.process_line():
+                print("ERRRRRRROOROROROROROROROROR")
+
