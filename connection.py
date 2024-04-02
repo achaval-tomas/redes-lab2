@@ -7,7 +7,7 @@ from base64 import b64encode
 from constants import EOL
 import re
 import socket as s
-from typing import Callable
+from typing import Callable, List, Tuple, Union
 
 BUFFER_SIZE = 1024
 
@@ -21,7 +21,7 @@ class Connection(object):
 
     socket: s.socket
     dir: str
-    commands: list[tuple[str, Callable[[list[str]], None]]]
+    commands: List[Tuple[str, Callable[[List[str]], None]]]
 
     # the remaining data after calling recv_line()
     remaining_data: str
@@ -38,7 +38,7 @@ class Connection(object):
         self.remaining_data = ""
         self.quit = False
 
-    def recv_line(self) -> str | None:
+    def recv_line(self) -> Union[str, None]:
         # Start the line with the remaining data of the previous recv()
         line = self.remaining_data
         self.remaining_data = ""
