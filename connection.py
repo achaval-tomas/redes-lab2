@@ -76,6 +76,7 @@ class Connection(object):
 
     def quit_handler(self, args):
         print("QUITTY")
+        self.send('0 OK')
         self.quit = True
 
     def get_slice_handler(self, args):
