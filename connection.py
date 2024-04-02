@@ -38,6 +38,13 @@ class Connection(object):
         self.remaining_data = ""
         self.quit = False
 
+    def send(self, msg: str):
+        msg += EOL
+
+        while msg:
+            bytes_sent = self.socket.send(msg.encode('ascii'))
+            msg = msg[bytes_sent:]
+
     def recv_line(self) -> Union[str, None]:
         # Start the line with the remaining data of the previous recv()
         line = self.remaining_data
