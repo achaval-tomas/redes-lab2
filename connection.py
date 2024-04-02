@@ -104,3 +104,4 @@ class Connection(object):
                 print("ERRRRRRROOROROROROROROROROR")
 
         print("Terminating connection with client.")
+        self.socket.close()
