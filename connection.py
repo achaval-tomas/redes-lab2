@@ -7,6 +7,7 @@ from base64 import b64encode
 from constants import EOL
 import re
 import socket as s
+import os
 from typing import Callable, List, Tuple, Union
 
 BUFFER_SIZE = 1024
@@ -33,6 +34,7 @@ class Connection(object):
         self.dir = directory
         self.commands = [
             (r"^get_slice (\d+) (\d+) (\d+)\r\n$", self.get_slice_handler),
+            (r"^get_file_listing\r\n$", self.get_file_listing_handler),
             (r"^quit\r\n$", self.quit_handler)
         ]
         self.remaining_data = ""
@@ -42,8 +44,15 @@ class Connection(object):
         msg += EOL
 
         while msg:
-            bytes_sent = self.socket.send(msg.encode('ascii'))
+            try:
+                bytes_sent = self.socket.send(msg.encode('ascii'))
+            except UnicodeEncodeError:
+                print("ERROR: message contains invalid ascii.")
+                return False
+
             msg = msg[bytes_sent:]
+
+        return True
 
     def recv_line(self) -> Union[str, None]:
         # Start the line with the remaining data of the previous recv()
@@ -79,9 +88,28 @@ class Connection(object):
         self.send('0 OK')
         self.quit = True
 
-    def get_slice_handler(self, args):
-        pass
+    def get_file_listing_handler(self, args):
+        try:
+            files = os.listdir(self.dir)
+        except FileNotFoundError:
+            self.quit = True
+            self.send('199 Directory not found in server')
+            return
+            
+        self.send('0 OK')
+        
+        for filename in files:
+            if not self.send(filename):
+                self.quit = True
+                self.send('199 Filename contains non-ascii characters')
+                return
+        
+        self.send('')
 
+    def get_slice_handler(self, args):
+        print(args)
+        pass
+    
     def process_line(self, line: str):
         for (pattern, handler) in self.commands:
             match = re.search(pattern, line)
@@ -101,7 +129,8 @@ class Connection(object):
                 break
 
             if not self.process_line(line):
-                print("ERRRRRRROOROROROROROROROROR")
+                print("Invalid input.")
+                self.send('200 Invalid command')
 
         print("Terminating connection with client.")
         self.socket.close()
