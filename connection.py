@@ -35,6 +35,7 @@ class Connection(object):
         self.commands = [
             (r"^get_slice (\d+) (\d+) (\d+)\r\n$", self.get_slice_handler),
             (r"^get_file_listing\r\n$", self.get_file_listing_handler),
+            (r"^get_metadata ([a-zA-Z0-9-_.]+)\r\n$", self.get_metadata_handler),
             (r"^quit\r\n$", self.quit_handler)
         ]
         self.remaining_data = ""
@@ -105,6 +106,17 @@ class Connection(object):
                 return
         
         self.send('')
+    
+    def get_metadata_handler(self, args):
+        filename = args[0]
+        try:
+            size = os.stat(self.dir + "/" + filename).st_size
+        except FileNotFoundError:
+            self.send('202 File not found')
+            return
+
+        self.send('0 OK')
+        self.send(str(size))
 
     def get_slice_handler(self, args):
         print(args)
