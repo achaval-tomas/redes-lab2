@@ -135,15 +135,18 @@ class Connection(object):
             self.send('202 File not found')
             return
 
+        # return error if user asked for a slice that is outside the file
         if offset+size > os.stat(fpath).st_size:
             self.send('203 Invalid file slice')
             return
 
+        # open file with 'b' mode to read as bytes
         with open(fpath, 'rb') as file:
             file.seek(offset)
 
             data = file.read(size)
 
+        # encode file to bas64 before sending
         data = b64encode(data).decode()
 
         self.send('0 OK')
