@@ -33,7 +33,6 @@ class Connection(object):
         self.socket = socket
         self.dir = directory
         self.commands = [
-            (r"^get_slice (\d+) (\d+) (\d+)\r\n$", self.get_slice_handler),
             (r"^get_file_listing\r\n$", self.get_file_listing_handler),
             (r"^get_metadata ([a-zA-Z0-9-_.]+)\r\n$", self.get_metadata_handler),
             (r"^get_slice ([a-zA-Z0-9-_.]+) (\d+) (\d+)\r\n$", self.get_slice_handler),
@@ -124,12 +123,21 @@ class Connection(object):
         filename = args[0]
         offset = int(args[1])
         size = int(args[2])
-        fpath = self.get_filepath(filename)
 
-        with open(fpath,'r') as file:
+        try:
+            fpath = self.get_filepath(filename)
+        except FileNotFoundError:
+            self.send('202 File not found')
+            return
+
+        if offset+size > os.stat(fpath).st_size:
+            self.send('203 Invalid file slice')
+            return
+            
+        with open(fpath, 'r') as file:
             file.seek(offset)
 
-            data = file.read(size).encode('ascii')
+            data = file.read(size).encode()
 
         data = b64encode(data).decode()
 
