@@ -34,8 +34,13 @@ class Connection(object):
         self.dir = directory
         self.commands = [
             (r"^get_file_listing\r\n$", self.get_file_listing_handler),
-            (r"^get_metadata ([a-zA-Z0-9-_.]+)\r\n$", self.get_metadata_handler),
-            (r"^get_slice ([a-zA-Z0-9-_.]+) (\d+) (\d+)\r\n$", self.get_slice_handler),
+
+            (r"^get_metadata ([a-zA-Z0-9-_.]+)\r\n$",
+             self.get_metadata_handler),
+
+            (r"^get_slice ([a-zA-Z0-9-_.]+) (\d+) (\d+)\r\n$",
+             self.get_slice_handler),
+
             (r"^quit\r\n$", self.quit_handler)
         ]
         self.remaining_data = ""
@@ -96,17 +101,17 @@ class Connection(object):
             self.quit = True
             self.send('199 Directory not found in server')
             return
-            
+
         self.send('0 OK')
-        
+
         for filename in files:
             if not self.send(filename):
                 self.quit = True
                 self.send('199 Filename contains non-ascii characters')
                 return
-        
+
         self.send('')
-    
+
     def get_metadata_handler(self, args):
         filename = args[0]
         fpath = self.get_filepath(filename)
@@ -133,7 +138,7 @@ class Connection(object):
         if offset+size > os.stat(fpath).st_size:
             self.send('203 Invalid file slice')
             return
-            
+
         with open(fpath, 'r') as file:
             file.seek(offset)
 
@@ -143,7 +148,7 @@ class Connection(object):
 
         self.send('0 OK')
         self.send(data)
-    
+
     def process_line(self, line: str):
         for (pattern, handler) in self.commands:
             match = re.search(pattern, line)
@@ -168,7 +173,7 @@ class Connection(object):
 
         print("Terminating connection with client.")
         self.socket.close()
-    
+
     # Helper functions
     def get_filepath(self, filename):
         return self.dir + "/" + filename
