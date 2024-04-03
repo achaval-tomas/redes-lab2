@@ -8,7 +8,7 @@ from constants import EOL
 import re
 import socket as s
 import os
-from typing import Callable, List, Tuple, Union
+from typing import Callable, Dict, List, Tuple, Union
 
 BUFFER_SIZE = 1024
 
@@ -22,7 +22,7 @@ class Connection(object):
 
     socket: s.socket
     dir: str
-    commands: List[Tuple[str, Callable[[List[str]], None]]]
+    commands: Dict[str, Tuple[List[str], Callable[[List[str]], None]]]
 
     # the remaining data after calling recv_line()
     remaining_data: str
@@ -32,17 +32,12 @@ class Connection(object):
     def __init__(self, socket: s.socket, directory: str):
         self.socket = socket
         self.dir = directory
-        self.commands = [
-            (r"^get_file_listing\r\n$", self.get_file_listing_handler),
-
-            (r"^get_metadata ([a-zA-Z0-9-_.]+)\r\n$",
-             self.get_metadata_handler),
-
-            (r"^get_slice ([a-zA-Z0-9-_.]+) (\d+) (\d+)\r\n$",
-             self.get_slice_handler),
-
-            (r"^quit\r\n$", self.quit_handler)
-        ]
+        self.commands = {
+            "get_file_listing": ([], self.get_file_listing_handler),
+            "get_metadata": ([r"a-zA-Z0-9-_."], self.get_metadata_handler),
+            "get_slice": ([r"{a-zA-Z0-9-_.}", r"\d", r"\d"], self.get_slice_handler),
+            "quit": ([], self.quit_handler),
+        }
         self.remaining_data = ""
         self.quit = False
 
@@ -153,13 +148,35 @@ class Connection(object):
         self.send(data)
 
     def process_line(self, line: str):
-        for (pattern, handler) in self.commands:
-            match = re.search(pattern, line)
-            if match is not None:
-                handler(match.groups())
-                return True
+        cmd_name_match = re.match(r"([a-z_]+)( |\r\n)", line)
+        if cmd_name_match is None:
+            return 101, "Couldn't parse command name"
 
-        return False
+        cmd_name = cmd_name_match.group(1)
+
+        cmd = self.commands.get(cmd_name, None)
+        if cmd is None:
+            return 200, f"Command '{cmd_name}' is not a valid command"
+
+        (args_charsets, handler) = cmd
+
+        args = []
+        line = line[len(cmd_name):]
+        for arg_charset in args_charsets:
+            arg_match = re.match(f"^ ([{arg_charset}]+)", line)
+            if arg_match is None:
+                return 201, "Invalid or missing argument"
+            arg = arg_match.group(1)
+            args.append(arg)
+            line = line[1 + len(arg):]
+
+        if line != EOL:
+            return 201, "EOL not found after last argument"
+
+        # TODO: fix
+        handler(args)
+
+        return 0, "OK"
 
     def handle(self):
         """
@@ -170,9 +187,12 @@ class Connection(object):
             if line is None:
                 break
 
-            if not self.process_line(line):
-                print("Invalid input.")
-                self.send('200 Invalid command')
+            code, msg = self.process_line(line)
+
+            assert code is not None and msg is not None
+
+            if code != 0:
+                self.send(f'{code} {msg}')
 
         print("Terminating connection with client.")
         self.socket.close()
