@@ -85,7 +85,7 @@ class Connection(object):
             return line
 
     def quit_handler(self, args):
-        print("QUITTY")
+        print("Client requested to quit.")
         self.send('0 OK')
         self.quit = True
 
