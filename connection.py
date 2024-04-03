@@ -139,10 +139,10 @@ class Connection(object):
             self.send('203 Invalid file slice')
             return
 
-        with open(fpath, 'r') as file:
+        with open(fpath, 'rb') as file:
             file.seek(offset)
 
-            data = file.read(size).encode()
+            data = file.read(size)
 
         data = b64encode(data).decode()
 
