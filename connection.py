@@ -36,6 +36,7 @@ class Connection(object):
             (r"^get_slice (\d+) (\d+) (\d+)\r\n$", self.get_slice_handler),
             (r"^get_file_listing\r\n$", self.get_file_listing_handler),
             (r"^get_metadata ([a-zA-Z0-9-_.]+)\r\n$", self.get_metadata_handler),
+            (r"^get_slice ([a-zA-Z0-9-_.]+) (\d+) (\d+)\r\n$", self.get_slice_handler),
             (r"^quit\r\n$", self.quit_handler)
         ]
         self.remaining_data = ""
@@ -109,8 +110,9 @@ class Connection(object):
     
     def get_metadata_handler(self, args):
         filename = args[0]
+        fpath = self.get_filepath(filename)
         try:
-            size = os.stat(self.dir + "/" + filename).st_size
+            size = os.stat(fpath).st_size
         except FileNotFoundError:
             self.send('202 File not found')
             return
@@ -119,8 +121,20 @@ class Connection(object):
         self.send(str(size))
 
     def get_slice_handler(self, args):
-        print(args)
-        pass
+        filename = args[0]
+        offset = int(args[1])
+        size = int(args[2])
+        fpath = self.get_filepath(filename)
+
+        with open(fpath,'r') as file:
+            file.seek(offset)
+
+            data = file.read(size).encode('ascii')
+
+        data = b64encode(data).decode()
+
+        self.send('0 OK')
+        self.send(data)
     
     def process_line(self, line: str):
         for (pattern, handler) in self.commands:
@@ -146,3 +160,7 @@ class Connection(object):
 
         print("Terminating connection with client.")
         self.socket.close()
+    
+    # Helper functions
+    def get_filepath(self, filename):
+        return self.dir + "/" + filename
