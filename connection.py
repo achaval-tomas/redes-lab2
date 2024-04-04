@@ -109,6 +109,11 @@ class Connection(object):
             size = os.stat(filepath).st_size
         except FileNotFoundError:
             return 202, "File not found"
+        except OSError as e:
+            if e.errno == 36:
+                return 202, "Filename too long"
+
+            return 199, "Internal error"
 
         return 0, "OK", str(size).encode('ascii')
 
