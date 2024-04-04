@@ -8,6 +8,7 @@ from constants import EOL
 import re
 import socket as s
 import os
+import logging
 from typing import Callable, Dict, List, Tuple, Union
 
 BUFFER_SIZE = 1024
@@ -182,6 +183,19 @@ class Connection(object):
         """
         Atiende eventos de la conexión hasta que termina.
         """
+        try:
+            self.handle_inner()
+        except Exception as e:
+            logging.exception(e)
+            try:
+                self.send("199 Internal server error")
+            except Exception as e:
+                logging.exception(e)
+        finally:
+            print("Terminating connection with client.")
+            self.socket.close()
+
+    def handle_inner(self):
         while not self.quit:
             line = self.recv_line()
             if line is None:
@@ -193,9 +207,6 @@ class Connection(object):
 
             if code != 0:
                 self.send(f'{code} {msg}')
-
-        print("Terminating connection with client.")
-        self.socket.close()
 
     # Helper functions
     def get_filepath(self, filename):
