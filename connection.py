@@ -152,11 +152,11 @@ class Connection(object):
             file.close()
 
     def process_line(self, line: str) -> HandlerResult:
+        if re.search(r"[^\r]\n", line) is not None:
+            return 100, "Found \\n outside EOL"
+
         cmd_name_match = re.match(r"([a-z_]+)( |\r\n)", line)
         if cmd_name_match is None:
-            if '\n' in line[:len(line) - 2]:
-                return 100, "Found \n outside eol"
-
             return 101, "Couldn't parse command name"
 
         cmd_name = cmd_name_match.group(1)
