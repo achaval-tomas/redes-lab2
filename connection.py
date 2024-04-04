@@ -4,7 +4,7 @@
 # $Id: connection.py 455 2011-05-01 00:32:09Z carlos $
 
 from base64 import b64encode
-from constants import EOL
+from constants import EOL, bEOL
 import re
 import socket as s
 import os
@@ -12,6 +12,12 @@ import logging
 from typing import Callable, Dict, List, Tuple, Union
 
 BUFFER_SIZE = 1024
+
+HandlerResult = Union[
+    Tuple[int, str],
+    Tuple[int, str, bytes],
+    Tuple[int, str, List[bytes]],
+]
 
 
 class Connection(object):
@@ -23,7 +29,7 @@ class Connection(object):
 
     socket: s.socket
     dir: str
-    commands: Dict[str, Tuple[List[str], Callable[[List[str]], None]]]
+    commands: Dict[str, Tuple[List[str], Callable[[List[str]], HandlerResult]]]
 
     # the remaining data after calling recv_line()
     remaining_data: str
@@ -36,25 +42,18 @@ class Connection(object):
         self.commands = {
             "get_file_listing": ([], self.get_file_listing_handler),
             "get_metadata": ([r"a-zA-Z0-9-_."], self.get_metadata_handler),
-            "get_slice": ([r"{a-zA-Z0-9-_.}", r"\d", r"\d"], self.get_slice_handler),
+            "get_slice": ([r"{a-zA-Z0-9-_.}", r"\d", r"\d"],
+                          self.get_slice_handler),
             "quit": ([], self.quit_handler),
         }
         self.remaining_data = ""
         self.quit = False
 
-    def send(self, msg: str):
-        msg += EOL
-
+    def send(self, msg: bytes):
         while msg:
-            try:
-                bytes_sent = self.socket.send(msg.encode('ascii'))
-            except UnicodeEncodeError:
-                print("ERROR: message contains invalid ascii.")
-                return False
+            bytes_sent = self.socket.send(msg)
 
             msg = msg[bytes_sent:]
-
-        return True
 
     def recv_line(self) -> Union[str, None]:
         # Start the line with the remaining data of the previous recv()
@@ -85,70 +84,68 @@ class Connection(object):
 
             return line
 
-    def quit_handler(self, args):
+    def quit_handler(self, _) -> HandlerResult:
         print("Client requested to quit.")
-        self.send('0 OK')
         self.quit = True
+        return 0, "OK"
 
-    def get_file_listing_handler(self, args):
-        try:
-            files = os.listdir(self.dir)
-        except FileNotFoundError:
-            self.quit = True
-            self.send('199 Directory not found in server')
-            return
+    def get_file_listing_handler(self, _) -> HandlerResult:
+        # List filenames. Exceptions should be handled by top level handler
+        filenames = os.listdir(self.dir)
 
-        self.send('0 OK')
+        # Encode as many filenames as possible
+        encoded = [try_encode(f, 'ascii') for f in filenames]
+        # Filter out filenames which contain non-ascii characters
+        filtered = [f for f in encoded if f is not None]
 
-        for filename in files:
-            if not self.send(filename):
-                self.quit = True
-                self.send('199 Filename contains non-ascii characters')
-                return
+        return 0, "OK", filtered
 
-        self.send('')
-
-    def get_metadata_handler(self, args):
+    def get_metadata_handler(self, args) -> HandlerResult:
         filename = args[0]
-        fpath = self.get_filepath(filename)
+
+        filepath = self.get_filepath(filename)
         try:
-            size = os.stat(fpath).st_size
+            size = os.stat(filepath).st_size
         except FileNotFoundError:
-            self.send('202 File not found')
-            return
+            return 202, "File not found"
 
-        self.send('0 OK')
-        self.send(str(size))
+        return 0, "OK", str(size).encode('ascii')
 
-    def get_slice_handler(self, args):
+    def get_slice_handler(self, args) -> HandlerResult:
         filename = args[0]
         offset = int(args[1])
         size = int(args[2])
 
+        filepath = self.get_filepath(filename)
+
         try:
-            fpath = self.get_filepath(filename)
+            # open file with 'b' mode to read as bytes
+            file = open(filepath, 'rb')
         except FileNotFoundError:
-            self.send('202 File not found')
-            return
+            return 202, "File not found"
+        except IsADirectoryError:
+            return 202, "The specified file is a directory"
+        except OSError:
+            return 199, "Error opening file"
 
-        # return error if user asked for a slice that is outside the file
-        if offset+size > os.stat(fpath).st_size:
-            self.send('203 Invalid file slice')
-            return
+        try:
+            stat = os.stat(file.fileno())
 
-        # open file with 'b' mode to read as bytes
-        with open(fpath, 'rb') as file:
+            # return error if user asked for a slice that is outside the file
+            if size + offset > stat.st_size:
+                return 203, "Invalid file slice"
+
             file.seek(offset)
 
             data = file.read(size)
+            # encode file to base64 before sending
+            data = b64encode(data)
 
-        # encode file to bas64 before sending
-        data = b64encode(data).decode()
+            return 0, "OK", data
+        finally:
+            file.close()
 
-        self.send('0 OK')
-        self.send(data)
-
-    def process_line(self, line: str):
+    def process_line(self, line: str) -> HandlerResult:
         cmd_name_match = re.match(r"([a-z_]+)( |\r\n)", line)
         if cmd_name_match is None:
             return 101, "Couldn't parse command name"
@@ -174,10 +171,7 @@ class Connection(object):
         if line != EOL:
             return 201, "EOL not found after last argument"
 
-        # TODO: fix
-        handler(args)
-
-        return 0, "OK"
+        return handler(args)
 
     def handle(self):
         """
@@ -188,7 +182,7 @@ class Connection(object):
         except Exception as e:
             logging.exception(e)
             try:
-                self.send("199 Internal server error")
+                self.send(b"199 Internal server error\r\n")
             except Exception as e:
                 logging.exception(e)
         finally:
@@ -201,13 +195,32 @@ class Connection(object):
             if line is None:
                 break
 
-            code, msg = self.process_line(line)
+            result = self.process_line(line)
 
-            assert code is not None and msg is not None
+            code = result[0]
+            desc = result[1]
+            body = result[2] if len(result) == 3 else None
 
-            if code != 0:
-                self.send(f'{code} {msg}')
+            msg = f'{code} {desc}'.encode('ascii')
+            msg += bEOL
+
+            if type(body) is bytes:
+                msg += body
+                msg += bEOL
+            elif type(body) is list:
+                msg += bEOL.join(body)
+                msg += bEOL
+                msg += bEOL
+
+            self.send(msg)
 
     # Helper functions
     def get_filepath(self, filename):
         return self.dir + "/" + filename
+
+
+def try_encode(s: str, encoding: str) -> Union[bytes | None]:
+    try:
+        return s.encode(encoding)
+    except UnicodeEncodeError:
+        return None
