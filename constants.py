@@ -11,6 +11,7 @@ DEFAULT_PORT = 19500
 
 
 EOL = '\r\n'
+bEOL = b'\r\n'
 
 
 CODE_OK = 0
