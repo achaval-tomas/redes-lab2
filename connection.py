@@ -220,7 +220,7 @@ class Connection(object):
         return self.dir + "/" + filename
 
 
-def try_encode(s: str, encoding: str) -> Union[bytes | None]:
+def try_encode(s: str, encoding: str) -> Union[bytes, None]:
     try:
         return s.encode(encoding)
     except UnicodeEncodeError:
