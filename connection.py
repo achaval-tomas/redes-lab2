@@ -12,6 +12,7 @@ import logging
 from typing import Callable, Dict, List, Tuple, Union
 
 BUFFER_SIZE = 1024
+FILENAME_CHARSET = r"a-zA-Z0-9-_."
 
 HandlerResult = Union[
     Tuple[int, str],
@@ -41,8 +42,8 @@ class Connection(object):
         self.dir = directory
         self.commands = {
             "get_file_listing": ([], self.get_file_listing_handler),
-            "get_metadata": ([r"a-zA-Z0-9-_."], self.get_metadata_handler),
-            "get_slice": ([r"{a-zA-Z0-9-_.}", r"\d", r"\d"],
+            "get_metadata": ([FILENAME_CHARSET], self.get_metadata_handler),
+            "get_slice": ([FILENAME_CHARSET, r"\d", r"\d"],
                           self.get_slice_handler),
             "quit": ([], self.quit_handler),
         }
