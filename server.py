@@ -10,7 +10,7 @@ import optparse
 import socket
 import sys
 from connection import Connection
-from constants import *
+from constants import DEFAULT_ADDR, DEFAULT_DIR, DEFAULT_PORT
 
 
 class Server(object):
@@ -22,12 +22,11 @@ class Server(object):
     def __init__(self, addr=DEFAULT_ADDR, port=DEFAULT_PORT,
                  directory=DEFAULT_DIR):
         print("Serving %s on %s:%s." % (directory, addr, port))
-        
+
         self.socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.port = port
         self.addr = addr
         self.dir = directory
-
 
     def serve(self):
         """
@@ -40,7 +39,6 @@ class Server(object):
             (sock, _) = self.socket.accept()
             connection = Connection(sock, self.dir)
             connection.handle()
-            
 
 
 def main():
