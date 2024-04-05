@@ -9,6 +9,7 @@
 import optparse
 import socket
 import sys
+import threading
 from connection import Connection
 from constants import DEFAULT_ADDR, DEFAULT_DIR, DEFAULT_PORT
 
@@ -37,8 +38,15 @@ class Server(object):
         self.socket.listen()
         while True:
             (sock, _) = self.socket.accept()
-            connection = Connection(sock, self.dir)
-            connection.handle()
+            thread = threading.Thread(target=self.create_connection,
+                                      args=(sock,))
+            # the comma is super necessary for it to be a tuple
+
+            thread.start()
+
+    def create_connection(self, socket):
+        connection = Connection(socket, self.dir)
+        connection.handle()
 
 
 def main():
