@@ -49,6 +49,7 @@ class Connection(object):
         }
         self.remaining_data = ""
         self.quit = False
+        print(f"Connecting with: {socket.getpeername()}.")
 
     def send(self, msg: bytes):
         while msg:
