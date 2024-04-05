@@ -157,7 +157,7 @@ class Connection(object):
             file.close()
 
     def process_line(self, line: str) -> HandlerResult:
-        if re.search(r"[^\r]\n", line) is not None:
+        if '\n' in line[:-len(EOL)] is not None:
             return 100, "Found \\n outside EOL"
 
         cmd_name_match = re.match(r"([a-z_]+)( |\r\n)", line)
