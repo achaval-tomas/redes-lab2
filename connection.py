@@ -111,10 +111,14 @@ class Connection(object):
         except FileNotFoundError:
             return 202, "File not found"
         except OSError as e:
-            if e.errno == 36:
+            if os.name == 'posix' and e.errno == 36:
                 return 202, "Filename too long"
 
             return 199, "Internal error"
+        except ValueError as e:
+            if os.name == 'nt':
+                return 202, "Filename too long"
+            raise e
 
         return 0, "OK", str(size).encode('ascii')
 
