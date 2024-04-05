@@ -200,7 +200,8 @@ class Connection(object):
             except Exception as e:
                 logging.exception(e)
         finally:
-            print("Terminating connection with client.")
+            peername = self.socket.getpeername()
+            print(f"Terminating connection with client at {peername}.")
             self.socket.close()
 
     def handle_inner(self):
