@@ -68,22 +68,23 @@ class Connection(object):
                 print("ERROR: message contains invalid ascii.")
                 return None
 
+            # If no data was read then socket is closed
             if len(data) == 0:
                 return None
 
-            eol_index = data.find(EOL)
+            line += data
+
+            eol_index = line.find(EOL)
             if eol_index == -1:
                 # No EOL found, keep receiving
-                line += data
                 continue
 
             next_line_index = eol_index + len(EOL)
 
-            line += data[0:next_line_index]
             # Set leftovers as the remaining data
-            self.remaining_data = data[next_line_index:]
+            self.remaining_data = line[next_line_index:]
 
-            return line
+            return line[0:next_line_index]
 
     def quit_handler(self, _) -> HandlerResult:
         print("Client requested to quit.")
