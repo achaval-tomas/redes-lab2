@@ -211,30 +211,32 @@ class Connection(object):
         """
         Retorna True si la conexión debe cerrarse.
         """
-        line = self.recv_line()
-        if line is None:
-            return True
+        while True:
+            if self.quit:
+                return True
 
-        result = self.process_line(line)
+            line = self.recv_line()
+            if line is None:
+                return True
 
-        code = result[0]
-        desc = result[1]
-        body = result[2] if len(result) == 3 else None
+            result = self.process_line(line)
 
-        msg = f'{code} {desc}'.encode('ascii')
-        msg += bEOL
+            code = result[0]
+            desc = result[1]
+            body = result[2] if len(result) == 3 else None
 
-        if type(body) is bytes:
-            msg += body
-            msg += bEOL
-        elif type(body) is list:
-            msg += bEOL.join(body)
-            msg += bEOL
+            msg = f'{code} {desc}'.encode('ascii')
             msg += bEOL
 
-        self.send(msg)
+            if type(body) is bytes:
+                msg += body
+                msg += bEOL
+            elif type(body) is list:
+                msg += bEOL.join(body)
+                msg += bEOL
+                msg += bEOL
 
-        return self.quit
+            self.send(msg)
 
     # Helper functions
     def get_filepath(self, filename):
