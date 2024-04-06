@@ -49,10 +49,13 @@ class Connection(object):
         }
         self.remaining_data = ""
         self.quit = False
-        print(f"Established connection with {format_ip(self.socket.getpeername())}")
+
+        peername = format_ip(self.socket.getpeername())
+        print(f"Established connection with {peername}")
 
     def close(self):
-        print(f"Terminating connection with {format_ip(self.socket.getpeername())}")
+        peername = format_ip(self.socket.getpeername())
+        print(f"Established connection with {peername}")
         self.socket.close()
 
     def send(self, msg: bytes):
@@ -61,7 +64,12 @@ class Connection(object):
 
             msg = msg[bytes_sent:]
 
-    def send_message(self, code: int, desc: str, body: Union[None, bytes, List[bytes]] = None):
+    def send_message(
+            self,
+            code: int,
+            desc: str,
+            body: Union[None, bytes, List[bytes]] = None
+    ):
         msg = f'{code} {desc}'.encode('ascii')
         msg += bEOL
 

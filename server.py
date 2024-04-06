@@ -9,7 +9,6 @@
 import optparse
 import socket
 import sys
-import threading
 import select
 from connection import Connection
 from constants import DEFAULT_ADDR, DEFAULT_DIR, DEFAULT_PORT
@@ -56,7 +55,8 @@ class Server(object):
                     new_sock.setblocking(False)
 
                     poller.register(new_sock, select.POLLIN)
-                    connections[new_sock.fileno()] = Connection(new_sock, self.dir)
+                    connections[new_sock.fileno()] = Connection(new_sock,
+                                                                self.dir)
                 else:
                     # Client socket event
 
