@@ -49,10 +49,10 @@ class Connection(object):
         }
         self.remaining_data = ""
         self.quit = False
-        print(f"Connecting with: {socket.getpeername()}.")
+        print(f"Established connection with {format_ip(self.socket.getpeername())}")
 
     def close(self):
-        print(f"Terminating connection with {self.socket.getpeername()}")
+        print(f"Terminating connection with {format_ip(self.socket.getpeername())}")
         self.socket.close()
 
     def send(self, msg: bytes):
@@ -263,3 +263,7 @@ def try_encode(s: str, encoding: str) -> Union[bytes, None]:
         return s.encode(encoding)
     except UnicodeEncodeError:
         return None
+
+
+def format_ip(ip_port: Tuple[str, int]) -> str:
+    return f"{ip_port[0]}:{ip_port[1]}"
