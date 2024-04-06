@@ -100,6 +100,7 @@ class Connection(object):
             try:
                 data = self.socket.recv(BUFFER_SIZE).decode('ascii')
             except BlockingIOError:
+                self.remaining_data = line
                 return ''
             except UnicodeDecodeError:
                 self.send_message(101, "Message contains non-ascii characters")
