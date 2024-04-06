@@ -32,8 +32,8 @@ class Connection(object):
     dir: str
     commands: Dict[str, Tuple[List[str], Callable[[List[str]], HandlerResult]]]
 
-    # the remaining data after calling recv_line()
-    remaining_data: str
+    # accumulator of recv()'ed data
+    data_acc: str
 
     quit: bool
 
@@ -47,7 +47,7 @@ class Connection(object):
                           self.get_slice_handler),
             "quit": ([], self.quit_handler),
         }
-        self.remaining_data = ""
+        self.data_acc = ''
         self.quit = False
 
         peername = format_ip(self.socket.getpeername())
@@ -92,15 +92,10 @@ class Connection(object):
         and the connection should be closed.
         """
 
-        # Start the line with the remaining data of the previous recv()
-        line = self.remaining_data
-        self.remaining_data = ""
-
         while True:
             try:
                 data = self.socket.recv(BUFFER_SIZE).decode('ascii')
             except BlockingIOError:
-                self.remaining_data = line
                 return ''
             except UnicodeDecodeError:
                 self.send_message(101, "Message contains non-ascii characters")
@@ -110,19 +105,22 @@ class Connection(object):
             if len(data) == 0:
                 return None
 
-            line += data
+            # accumulate data
+            self.data_acc += data
 
-            eol_index = line.find(EOL)
+            # check if EOL in data
+            eol_index = self.data_acc.find(EOL)
             if eol_index == -1:
                 # No EOL found, keep receiving
                 continue
 
             next_line_index = eol_index + len(EOL)
 
-            # Set leftovers as the remaining data
-            self.remaining_data = line[next_line_index:]
+            line = self.data_acc[0:next_line_index]
+            # Strip line from accumulator
+            self.data_acc = self.data_acc[next_line_index:]
 
-            return line[0:next_line_index]
+            return line
 
     def quit_handler(self, _) -> HandlerResult:
         print("Client requested to quit.")
