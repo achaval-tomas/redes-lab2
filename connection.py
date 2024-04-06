@@ -80,7 +80,7 @@ class Connection(object):
             try:
                 data = self.socket.recv(BUFFER_SIZE).decode('ascii')
             except UnicodeDecodeError:
-                print("ERROR: message contains invalid ascii.")
+                self.send_message(101, "Message contains non-ascii characters")
                 return None
 
             # If no data was read then socket is closed
