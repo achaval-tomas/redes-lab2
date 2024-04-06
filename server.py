@@ -45,7 +45,7 @@ class Server(object):
         connections: Dict[int, Connection] = {}
 
         while True:
-            pollObj = poller.poll(5000)
+            pollObj = poller.poll()
             for sock_fd, event in pollObj:
                 if not (event & select.POLLIN):
                     break
