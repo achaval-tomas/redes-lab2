@@ -45,10 +45,10 @@ class Server(object):
         connections: Dict[int, Connection] = {}
 
         while True:
-            pollObj = poller.poll()
-            for sock_fd, event in pollObj:
+            events = poller.poll()
+            for sock_fd, event in events:
                 if not (event & select.POLLIN):
-                    break
+                    continue
                 if sock_fd == self.socket.fileno():
                     (new_sock, _) = self.socket.accept()
                     new_sock.setblocking(False)
@@ -57,6 +57,7 @@ class Server(object):
                     connections[new_sock.fileno()] = Connection(new_sock, self.dir)
                 else:
                     client = connections[sock_fd]
+
                     should_close_client = client.on_read_available()
                     if should_close_client:
                         client.close()
