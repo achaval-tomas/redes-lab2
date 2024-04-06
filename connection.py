@@ -55,8 +55,8 @@ class Connection(object):
 
     def close(self):
         peername = format_ip(self.socket.getpeername())
-        print(f"Established connection with {peername}")
         self.socket.close()
+        print(f"Closed connection with {peername}")
 
     def send(self, msg: bytes):
         while msg:
