@@ -61,6 +61,20 @@ class Connection(object):
 
             msg = msg[bytes_sent:]
 
+    def send_message(self, code: int, desc: str, body: Union[None, bytes, List[bytes]] = None):
+        msg = f'{code} {desc}'.encode('ascii')
+        msg += bEOL
+
+        if type(body) is bytes:
+            msg += body
+            msg += bEOL
+        elif type(body) is list:
+            msg += bEOL.join(body)
+            msg += bEOL
+            msg += bEOL
+
+        self.send(msg)
+
     def recv_line(self) -> Union[str, None]:
         """
         Tries to read a line from the socket.
@@ -80,7 +94,7 @@ class Connection(object):
             except BlockingIOError:
                 return ''
             except UnicodeDecodeError:
-                print("ERROR: message contains invalid ascii.")
+                self.send_message(101, "Message contains non-ascii characters")
                 return None
 
             # If no data was read then socket is closed
@@ -212,7 +226,7 @@ class Connection(object):
         except Exception as e:
             logging.exception(e)
             try:
-                self.send(b"199 Internal server error\r\n")
+                self.send_message(199, "Internal server error")
             except Exception as e:
                 logging.exception(e)
             return True
@@ -237,18 +251,7 @@ class Connection(object):
             desc = result[1]
             body = result[2] if len(result) == 3 else None
 
-            msg = f'{code} {desc}'.encode('ascii')
-            msg += bEOL
-
-            if type(body) is bytes:
-                msg += body
-                msg += bEOL
-            elif type(body) is list:
-                msg += bEOL.join(body)
-                msg += bEOL
-                msg += bEOL
-
-            self.send(msg)
+            self.send_message(code, desc, body)
 
     # Helper functions
     def get_filepath(self, filename):
