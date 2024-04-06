@@ -51,6 +51,10 @@ class Connection(object):
         self.quit = False
         print(f"Connecting with: {socket.getpeername()}.")
 
+    def close(self):
+        print(f"Terminating connection with {self.socket.getpeername()}")
+        self.socket.close()
+
     def send(self, msg: bytes):
         while msg:
             bytes_sent = self.socket.send(msg)
@@ -188,32 +192,22 @@ class Connection(object):
 
         return handler(args)
 
-    def handle(self) -> bool:
+    def on_read_available(self) -> bool:
         """
         Atiende eventos de la conexión hasta que termina.
-        Retorna falso si se cerró la conexión.
+        Retorna True si la conexión debe cerrarse.
         """
-        should_close: int
         try:
-            should_close = self.handle_inner()
+            return self.on_read_available_inner()
         except Exception as e:
             logging.exception(e)
             try:
                 self.send(b"199 Internal server error\r\n")
             except Exception as e:
                 logging.exception(e)
+            return True
 
-            should_close = True
-
-        if should_close:
-            peername = self.socket.getpeername()
-            print(f"Terminating connection with client at {peername}.")
-            self.socket.close()
-            return False
-
-        return True
-
-    def handle_inner(self) -> bool:
+    def on_read_available_inner(self) -> bool:
         """
         Retorna True si la conexión debe cerrarse.
         """

@@ -13,6 +13,7 @@ import threading
 import select
 from connection import Connection
 from constants import DEFAULT_ADDR, DEFAULT_DIR, DEFAULT_PORT
+from typing import Dict
 
 
 class Server(object):
@@ -41,7 +42,7 @@ class Server(object):
         poller = select.poll()
         poller.register(self.socket, select.POLLIN)
 
-        connections = {}
+        connections: Dict[int, Connection] = {}
 
         while True:
             pollObj = poller.poll(5000)
@@ -55,8 +56,9 @@ class Server(object):
                     new_connection = Connection(new_sock, self.dir)
                     connections[new_sock.fileno()] = new_connection
                 else:
-                    rc = connections[sock_fd].handle()
-                    if not rc:
+                    client = connections[sock_fd]
+                    if client.on_read_available():
+                        client.close()
                         poller.unregister(sock_fd)
                         connections.pop(sock_fd)
 
