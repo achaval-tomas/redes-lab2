@@ -57,6 +57,20 @@ class Connection(object):
 
             msg = msg[bytes_sent:]
 
+    def send_message(self, code: int, desc: str, body: Union[None, bytes, List[bytes]] = None):
+        msg = f'{code} {desc}'.encode('ascii')
+        msg += bEOL
+
+        if type(body) is bytes:
+            msg += body
+            msg += bEOL
+        elif type(body) is list:
+            msg += bEOL.join(body)
+            msg += bEOL
+            msg += bEOL
+
+        self.send(msg)
+
     def recv_line(self) -> Union[str, None]:
         # Start the line with the remaining data of the previous recv()
         line = self.remaining_data
@@ -197,7 +211,7 @@ class Connection(object):
         except Exception as e:
             logging.exception(e)
             try:
-                self.send(b"199 Internal server error\r\n")
+                self.send_message(199, "Internal server error")
             except Exception as e:
                 logging.exception(e)
         finally:
@@ -217,18 +231,7 @@ class Connection(object):
             desc = result[1]
             body = result[2] if len(result) == 3 else None
 
-            msg = f'{code} {desc}'.encode('ascii')
-            msg += bEOL
-
-            if type(body) is bytes:
-                msg += body
-                msg += bEOL
-            elif type(body) is list:
-                msg += bEOL.join(body)
-                msg += bEOL
-                msg += bEOL
-
-            self.send(msg)
+            self.send_message(code, desc, body)
 
     # Helper functions
     def get_filepath(self, filename):
