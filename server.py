@@ -50,12 +50,16 @@ class Server(object):
                 if not (event & select.POLLIN):
                     continue
                 if sock_fd == self.socket.fileno():
+                    # Server socket event
+
                     (new_sock, _) = self.socket.accept()
                     new_sock.setblocking(False)
 
                     poller.register(new_sock, select.POLLIN)
                     connections[new_sock.fileno()] = Connection(new_sock, self.dir)
                 else:
+                    # Client socket event
+
                     client = connections[sock_fd]
 
                     should_close_client = client.on_read_available()
