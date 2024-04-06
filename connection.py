@@ -188,47 +188,59 @@ class Connection(object):
 
         return handler(args)
 
-    def handle(self):
+    def handle(self) -> bool:
         """
         Atiende eventos de la conexión hasta que termina.
+        Retorna falso si se cerró la conexión.
         """
+        should_close: int
         try:
-            self.handle_inner()
+            should_close = self.handle_inner()
         except Exception as e:
             logging.exception(e)
             try:
                 self.send(b"199 Internal server error\r\n")
             except Exception as e:
                 logging.exception(e)
-        finally:
+
+            should_close = True
+
+        if should_close:
             peername = self.socket.getpeername()
             print(f"Terminating connection with client at {peername}.")
             self.socket.close()
+            return False
 
-    def handle_inner(self):
-        while not self.quit:
-            line = self.recv_line()
-            if line is None:
-                break
+        return True
 
-            result = self.process_line(line)
+    def handle_inner(self) -> bool:
+        """
+        Retorna True si la conexión debe cerrarse.
+        """
+        line = self.recv_line()
+        if line is None:
+            return True
 
-            code = result[0]
-            desc = result[1]
-            body = result[2] if len(result) == 3 else None
+        result = self.process_line(line)
 
-            msg = f'{code} {desc}'.encode('ascii')
+        code = result[0]
+        desc = result[1]
+        body = result[2] if len(result) == 3 else None
+
+        msg = f'{code} {desc}'.encode('ascii')
+        msg += bEOL
+
+        if type(body) is bytes:
+            msg += body
+            msg += bEOL
+        elif type(body) is list:
+            msg += bEOL.join(body)
+            msg += bEOL
             msg += bEOL
 
-            if type(body) is bytes:
-                msg += body
-                msg += bEOL
-            elif type(body) is list:
-                msg += bEOL.join(body)
-                msg += bEOL
-                msg += bEOL
+        self.send(msg)
 
-            self.send(msg)
+        return self.quit
 
     # Helper functions
     def get_filepath(self, filename):

@@ -10,6 +10,7 @@ import optparse
 import socket
 import sys
 import threading
+import select
 from connection import Connection
 from constants import DEFAULT_ADDR, DEFAULT_DIR, DEFAULT_PORT
 
@@ -36,17 +37,28 @@ class Server(object):
         """
         self.socket.bind((self.addr, self.port))
         self.socket.listen()
+
+        poller = select.poll()
+        poller.register(self.socket, select.POLLIN)
+
+        connections = {}
+
         while True:
-            (sock, _) = self.socket.accept()
-            thread = threading.Thread(target=self.create_connection,
-                                      args=(sock,))
-            # the comma is super necessary for it to be a tuple
+            pollObj = poller.poll(5000)
+            for sock_fd, event in pollObj:
+                if not (event & select.POLLIN):
+                    break
+                if sock_fd == self.socket.fileno():
+                    (new_sock, _) = self.socket.accept()
+                    poller.register(new_sock, select.POLLIN)
 
-            thread.start()
-
-    def create_connection(self, socket):
-        connection = Connection(socket, self.dir)
-        connection.handle()
+                    new_connection = Connection(new_sock, self.dir)
+                    connections[new_sock.fileno()] = new_connection
+                else:
+                    rc = connections[sock_fd].handle()
+                    if not rc:
+                        poller.unregister(sock_fd)
+                        connections.pop(sock_fd)
 
 
 def main():
