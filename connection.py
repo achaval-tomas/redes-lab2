@@ -62,6 +62,14 @@ class Connection(object):
             msg = msg[bytes_sent:]
 
     def recv_line(self) -> Union[str, None]:
+        """
+        Tries to read a line from the socket.
+        An empty string means that a line could not be read
+        but the connection should not be closed.
+        None means that a line could not be read
+        and the connection should be closed.
+        """
+
         # Start the line with the remaining data of the previous recv()
         line = self.remaining_data
         self.remaining_data = ""
@@ -69,6 +77,8 @@ class Connection(object):
         while True:
             try:
                 data = self.socket.recv(BUFFER_SIZE).decode('ascii')
+            except BlockingIOError:
+                return ''
             except UnicodeDecodeError:
                 print("ERROR: message contains invalid ascii.")
                 return None
@@ -216,6 +226,8 @@ class Connection(object):
                 return True
 
             line = self.recv_line()
+            if line == '':
+                return False
             if line is None:
                 return True
 

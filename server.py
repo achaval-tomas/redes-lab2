@@ -51,13 +51,14 @@ class Server(object):
                     break
                 if sock_fd == self.socket.fileno():
                     (new_sock, _) = self.socket.accept()
-                    poller.register(new_sock, select.POLLIN)
+                    new_sock.setblocking(False)
 
-                    new_connection = Connection(new_sock, self.dir)
-                    connections[new_sock.fileno()] = new_connection
+                    poller.register(new_sock, select.POLLIN)
+                    connections[new_sock.fileno()] = Connection(new_sock, self.dir)
                 else:
                     client = connections[sock_fd]
-                    if client.on_read_available():
+                    should_close_client = client.on_read_available()
+                    if should_close_client:
                         client.close()
                         poller.unregister(sock_fd)
                         connections.pop(sock_fd)
