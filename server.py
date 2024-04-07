@@ -69,9 +69,12 @@ class Server(object):
 
         should_close_client = client.on_read_available()
         if should_close_client:
-            client.close()
             self.poller.unregister(sock_fd)
             self.connections.pop(sock_fd)
+            try:
+                client.close()
+            except OSError:
+                print('Transport endpoint not connected, connection closed.')
         elif client.shoud_pollout():
             self.poller.modify(sock_fd, select.POLLIN | select.POLLOUT)
         else:
