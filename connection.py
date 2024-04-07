@@ -35,6 +35,8 @@ class Connection(object):
     # accumulator of recv()'ed data
     data_acc: str
 
+    send_buffer: bytes
+
     quit: bool
 
     def __init__(self, socket: s.socket, directory: str):
@@ -50,6 +52,8 @@ class Connection(object):
         self.data_acc = ''
         self.quit = False
 
+        self.send_buffer = b''
+
         peername = format_ip(self.socket.getpeername())
         print(f"Established connection with {peername}")
 
@@ -58,11 +62,16 @@ class Connection(object):
         self.socket.close()
         print(f"Closed connection with {peername}")
 
-    def send(self, msg: bytes):
-        while msg:
-            bytes_sent = self.socket.send(msg)
+    def send(self, msg: bytes = None):
+        if msg is not None:
+            self.send_buffer += msg
 
-            msg = msg[bytes_sent:]
+        while self.send_buffer:
+            try:
+                bytes_sent = self.socket.send(self.send_buffer)
+                self.send_buffer = self.send_buffer[bytes_sent:]
+            except BlockingIOError:
+                break
 
     def send_message(
             self,
@@ -242,27 +251,28 @@ class Connection(object):
         """
         Retorna True si la conexión debe cerrarse.
         """
-        while True:
-            if self.quit:
-                return True
+        line = self.recv_line()
+        if line == '':
+            return False
+        if line is None:
+            return True
 
-            line = self.recv_line()
-            if line == '':
-                return False
-            if line is None:
-                return True
+        result = self.process_line(line)
 
-            result = self.process_line(line)
+        code = result[0]
+        desc = result[1]
+        body = result[2] if len(result) == 3 else None
 
-            code = result[0]
-            desc = result[1]
-            body = result[2] if len(result) == 3 else None
+        self.send_message(code, desc, body)
 
-            self.send_message(code, desc, body)
+        return self.quit
 
     # Helper functions
     def get_filepath(self, filename):
         return self.dir + "/" + filename
+
+    def shoud_pollout(self) -> bool:
+        return len(self.send_buffer) > 0
 
 
 def try_encode(s: str, encoding: str) -> Union[bytes, None]:

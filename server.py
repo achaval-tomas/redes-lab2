@@ -12,7 +12,6 @@ import sys
 import select
 from connection import Connection
 from constants import DEFAULT_ADDR, DEFAULT_DIR, DEFAULT_PORT
-from typing import Dict
 
 
 class Server(object):
@@ -29,6 +28,8 @@ class Server(object):
         self.port = port
         self.addr = addr
         self.dir = directory
+        self.connections = {}
+        self.poller = None
 
     def serve(self):
         """
@@ -38,35 +39,49 @@ class Server(object):
         self.socket.bind((self.addr, self.port))
         self.socket.listen()
 
-        poller = select.poll()
-        poller.register(self.socket, select.POLLIN)
-
-        connections: Dict[int, Connection] = {}
+        self.poller = select.poll()
+        self.poller.register(self.socket, select.POLLIN)
 
         while True:
-            events = poller.poll()
+            events = self.poller.poll()
             for sock_fd, event in events:
-                if not (event & select.POLLIN):
+                if not (event & (select.POLLIN | select.POLLOUT)):
                     continue
-                if sock_fd == self.socket.fileno():
-                    # Server socket event
 
-                    (new_sock, _) = self.socket.accept()
-                    new_sock.setblocking(False)
+                if (event & select.POLLOUT):
+                    self.handle_pollout(sock_fd)
+                elif (event & select.POLLIN):
+                    if sock_fd == self.socket.fileno():
+                        # Server socket event
+                        self.handle_new_connection()
+                    else:
+                        self.handle_pollin(sock_fd)
 
-                    poller.register(new_sock, select.POLLIN)
-                    connections[new_sock.fileno()] = Connection(new_sock,
-                                                                self.dir)
-                else:
-                    # Client socket event
+    def handle_new_connection(self):
+        (new_sock, _) = self.socket.accept()
+        new_sock.setblocking(False)
 
-                    client = connections[sock_fd]
+        self.poller.register(new_sock, select.POLLIN)
+        self.connections[new_sock.fileno()] = Connection(new_sock, self.dir)
 
-                    should_close_client = client.on_read_available()
-                    if should_close_client:
-                        client.close()
-                        poller.unregister(sock_fd)
-                        connections.pop(sock_fd)
+    def handle_pollin(self, sock_fd):
+        client = self.connections[sock_fd]
+
+        should_close_client = client.on_read_available()
+        if should_close_client:
+            client.close()
+            self.poller.unregister(sock_fd)
+            self.connections.pop(sock_fd)
+        elif client.shoud_pollout():
+            self.poller.modify(sock_fd, select.POLLIN | select.POLLOUT)
+        else:
+            self.poller.modify(sock_fd, select.POLLIN)
+
+    def handle_pollout(self, sock_fd):
+        client = self.connections[sock_fd]
+        client.send()
+        if not client.shoud_pollout():
+            self.poller.modify(sock_fd, select.POLLIN)
 
 
 def main():
