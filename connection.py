@@ -109,6 +109,8 @@ class Connection(object):
             except UnicodeDecodeError:
                 self.send_message(101, "Message contains non-ascii characters")
                 return None
+            except ConnectionResetError:
+                return None
 
             # If no data was read then socket is closed
             if len(data) == 0:
