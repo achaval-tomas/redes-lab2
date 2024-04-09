@@ -4,7 +4,7 @@
 # $Id: connection.py 455 2011-05-01 00:32:09Z carlos $
 
 from base64 import b64encode
-from constants import EOL, bEOL
+from constants import *
 import re
 import socket as s
 import os
@@ -107,7 +107,7 @@ class Connection(object):
             except BlockingIOError:
                 return ''
             except UnicodeDecodeError:
-                self.send_message(101, "Message contains non-ascii characters")
+                self.send_message(BAD_REQUEST, "Message contains non-ascii characters")
                 return None
             except ConnectionResetError:
                 return None
@@ -136,7 +136,7 @@ class Connection(object):
     def quit_handler(self, _) -> HandlerResult:
         print("Client requested to quit.")
         self.quit = True
-        return 0, "OK"
+        return CODE_OK, "OK"
 
     def get_file_listing_handler(self, _) -> HandlerResult:
         # List filenames. Exceptions should be handled by top level handler
@@ -147,7 +147,7 @@ class Connection(object):
         # Filter out filenames which contain non-ascii characters
         filtered = [f for f in encoded if f is not None]
 
-        return 0, "OK", filtered
+        return CODE_OK, "OK", filtered
 
     def get_metadata_handler(self, args) -> HandlerResult:
         filename = args[0]
@@ -156,18 +156,18 @@ class Connection(object):
         try:
             size = os.stat(filepath).st_size
         except FileNotFoundError:
-            return 202, "File not found"
+            return FILE_NOT_FOUND, "File not found"
         except OSError as e:
             if os.name == 'posix' and e.errno == 36:
-                return 202, "Filename too long"
+                return FILE_NOT_FOUND, "Filename too long"
 
-            return 199, "Internal error"
+            return INTERNAL_ERROR, "Internal error"
         except ValueError as e:
             if os.name == 'nt':
-                return 202, "Filename too long"
+                return FILE_NOT_FOUND, "Filename too long"
             raise e
 
-        return 0, "OK", str(size).encode('ascii')
+        return CODE_OK, "OK", str(size).encode('ascii')
 
     def get_slice_handler(self, args) -> HandlerResult:
         filename = args[0]
@@ -180,18 +180,18 @@ class Connection(object):
             # open file with 'b' mode to read as bytes
             file = open(filepath, 'rb')
         except FileNotFoundError:
-            return 202, "File not found"
+            return FILE_NOT_FOUND, "File not found"
         except IsADirectoryError:
-            return 202, "The specified file is a directory"
+            return FILE_NOT_FOUND, "The specified file is a directory"
         except OSError:
-            return 199, "Error opening file"
+            return INTERNAL_ERROR, "Error opening file"
 
         try:
             stat = os.stat(file.fileno())
 
             # return error if user asked for a slice that is outside the file
             if size + offset > stat.st_size:
-                return 203, "Invalid file slice"
+                return BAD_OFFSET, "Invalid file slice"
 
             file.seek(offset)
 
@@ -199,23 +199,23 @@ class Connection(object):
             # encode file to base64 before sending
             data = b64encode(data)
 
-            return 0, "OK", data
+            return CODE_OK, "OK", data
         finally:
             file.close()
 
     def process_line(self, line: str) -> HandlerResult:
         if '\n' in line[:-len(EOL)] is not None:
-            return 100, "Found \\n outside EOL"
+            return BAD_EOL, "Found \\n outside EOL"
 
         cmd_name_match = re.match(r"([a-z_]+)( |\r\n)", line)
         if cmd_name_match is None:
-            return 101, "Couldn't parse command name"
+            return BAD_REQUEST, "Couldn't parse command name"
 
         cmd_name = cmd_name_match.group(1)
 
         cmd = self.commands.get(cmd_name, None)
         if cmd is None:
-            return 200, f"Command '{cmd_name}' is not a valid command"
+            return INVALID_COMMAND, f"Command '{cmd_name}' is not a valid command"
 
         (args_charsets, handler) = cmd
 
@@ -224,13 +224,13 @@ class Connection(object):
         for arg_charset in args_charsets:
             arg_match = re.match(f"^ ([{arg_charset}]+)", line)
             if arg_match is None:
-                return 201, "Invalid or missing argument"
+                return INVALID_ARGUMENTS, "Invalid or missing argument"
             arg = arg_match.group(1)
             args.append(arg)
             line = line[1 + len(arg):]
 
         if line != EOL:
-            return 201, "EOL not found after last argument"
+            return INVALID_ARGUMENTS, "EOL not found after last argument"
 
         return handler(args)
 
@@ -244,7 +244,7 @@ class Connection(object):
         except Exception as e:
             logging.exception(e)
             try:
-                self.send_message(199, "Internal server error")
+                self.send_message(INTERNAL_ERROR, "Internal server error")
             except Exception as e:
                 logging.exception(e)
             return True
