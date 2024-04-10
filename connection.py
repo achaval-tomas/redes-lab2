@@ -4,7 +4,9 @@
 # $Id: connection.py 455 2011-05-01 00:32:09Z carlos $
 
 from base64 import b64encode
-from constants import *
+from constants import (EOL, bEOL, fatal_status, BAD_REQUEST, CODE_OK,
+                       FILE_NOT_FOUND, INTERNAL_ERROR, BAD_OFFSET,
+                       BAD_EOL, INVALID_COMMAND, INVALID_ARGUMENTS)
 import re
 import socket as s
 import os
@@ -107,7 +109,8 @@ class Connection(object):
             except BlockingIOError:
                 return ''
             except UnicodeDecodeError:
-                self.send_message(BAD_REQUEST, "Message contains non-ascii characters")
+                self.send_message(
+                    BAD_REQUEST, "Message contains non-ascii characters")
                 return None
             except ConnectionResetError:
                 return None
@@ -215,7 +218,8 @@ class Connection(object):
 
         cmd = self.commands.get(cmd_name, None)
         if cmd is None:
-            return INVALID_COMMAND, f"Command '{cmd_name}' is not a valid command"
+            return (INVALID_COMMAND,
+                    f"Command '{cmd_name}' is not a valid command")
 
         (args_charsets, handler) = cmd
 
