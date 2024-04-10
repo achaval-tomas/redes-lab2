@@ -269,6 +269,9 @@ class Connection(object):
         desc = result[1]
         body = result[2] if len(result) == 3 else None
 
+        if fatal_status(code):
+            self.quit = True
+
         self.send_message(code, desc, body)
 
         return self.quit
