@@ -4,7 +4,9 @@
 # $Id: connection.py 455 2011-05-01 00:32:09Z carlos $
 
 from base64 import b64encode
-from constants import *
+from constants import (EOL, bEOL, fatal_status, BAD_REQUEST, CODE_OK,
+                       FILE_NOT_FOUND, INTERNAL_ERROR, BAD_OFFSET,
+                       BAD_EOL, INVALID_COMMAND, INVALID_ARGUMENTS)
 import re
 import socket as s
 import os
@@ -32,8 +34,10 @@ class Connection(object):
     dir: str
     commands: Dict[str, Tuple[List[str], Callable[[List[str]], HandlerResult]]]
 
-    # the remaining data after calling recv_line()
-    remaining_data: str
+    # accumulator of recv()'ed data
+    data_acc: str
+
+    send_buffer: bytes
 
     quit: bool
 
@@ -47,17 +51,36 @@ class Connection(object):
                           self.get_slice_handler),
             "quit": ([], self.quit_handler),
         }
-        self.remaining_data = ""
+        self.data_acc = ''
         self.quit = False
-        print(f"Connecting with: {socket.getpeername()}.")
 
-    def send(self, msg: bytes):
-        while msg:
-            bytes_sent = self.socket.send(msg)
+        self.send_buffer = b''
 
-            msg = msg[bytes_sent:]
+        peername = format_ip(self.socket.getpeername())
+        print(f"Established connection with {peername}")
 
-    def send_message(self, code: int, desc: str, body: Union[None, bytes, List[bytes]] = None):
+    def close(self):
+        peername = format_ip(self.socket.getpeername())
+        self.socket.close()
+        print(f"Closed connection with {peername}")
+
+    def send(self, msg: bytes = None):
+        if msg is not None:
+            self.send_buffer += msg
+
+        while self.send_buffer:
+            try:
+                bytes_sent = self.socket.send(self.send_buffer)
+                self.send_buffer = self.send_buffer[bytes_sent:]
+            except BlockingIOError:
+                break
+
+    def send_message(
+            self,
+            code: int,
+            desc: str,
+            body: Union[None, bytes, List[bytes]] = None
+    ):
         msg = f'{code} {desc}'.encode('ascii')
         msg += bEOL
 
@@ -72,34 +95,46 @@ class Connection(object):
         self.send(msg)
 
     def recv_line(self) -> Union[str, None]:
-        # Start the line with the remaining data of the previous recv()
-        line = self.remaining_data
-        self.remaining_data = ""
+        """
+        Tries to read a line from the socket.
+        An empty string means that a line could not be read
+        but the connection should not be closed.
+        None means that a line could not be read
+        and the connection should be closed.
+        """
 
         while True:
             try:
                 data = self.socket.recv(BUFFER_SIZE).decode('ascii')
+            except BlockingIOError:
+                return ''
             except UnicodeDecodeError:
-                self.send_message(BAD_REQUEST, "Message contains non-ascii characters")
+                self.send_message(
+                    BAD_REQUEST, "Message contains non-ascii characters")
+                return None
+            except ConnectionResetError:
                 return None
 
             # If no data was read then socket is closed
             if len(data) == 0:
                 return None
 
-            line += data
+            # accumulate data
+            self.data_acc += data
 
-            eol_index = line.find(EOL)
+            # check if EOL in data
+            eol_index = self.data_acc.find(EOL)
             if eol_index == -1:
                 # No EOL found, keep receiving
                 continue
 
             next_line_index = eol_index + len(EOL)
 
-            # Set leftovers as the remaining data
-            self.remaining_data = line[next_line_index:]
+            line = self.data_acc[0:next_line_index]
+            # Strip line from accumulator
+            self.data_acc = self.data_acc[next_line_index:]
 
-            return line[0:next_line_index]
+            return line
 
     def quit_handler(self, _) -> HandlerResult:
         print("Client requested to quit.")
@@ -183,7 +218,8 @@ class Connection(object):
 
         cmd = self.commands.get(cmd_name, None)
         if cmd is None:
-            return INVALID_COMMAND, f"Command '{cmd_name}' is not a valid command"
+            return (INVALID_COMMAND,
+                    f"Command '{cmd_name}' is not a valid command")
 
         (args_charsets, handler) = cmd
 
@@ -202,40 +238,50 @@ class Connection(object):
 
         return handler(args)
 
-    def handle(self):
+    def on_read_available(self) -> bool:
         """
         Atiende eventos de la conexión hasta que termina.
+        Retorna True si la conexión debe cerrarse.
         """
         try:
-            self.handle_inner()
+            return self.on_read_available_inner()
         except Exception as e:
             logging.exception(e)
             try:
                 self.send_message(INTERNAL_ERROR, "Internal server error")
             except Exception as e:
                 logging.exception(e)
-        finally:
-            peername = self.socket.getpeername()
-            print(f"Terminating connection with client at {peername}.")
-            self.socket.close()
+            return True
 
-    def handle_inner(self):
-        while not self.quit:
-            line = self.recv_line()
-            if line is None:
-                break
+    def on_read_available_inner(self) -> bool:
+        """
+        Retorna True si la conexión debe cerrarse.
+        """
+        line = self.recv_line()
+        if line == '':
+            return False
+        if line is None:
+            return True
 
-            result = self.process_line(line)
+        result = self.process_line(line)
 
-            code = result[0]
-            desc = result[1]
-            body = result[2] if len(result) == 3 else None
+        code = result[0]
+        desc = result[1]
+        body = result[2] if len(result) == 3 else None
 
-            self.send_message(code, desc, body)
+        if fatal_status(code):
+            self.quit = True
+
+        self.send_message(code, desc, body)
+
+        return self.quit
 
     # Helper functions
     def get_filepath(self, filename):
         return self.dir + "/" + filename
+
+    def shoud_pollout(self) -> bool:
+        return len(self.send_buffer) > 0
 
 
 def try_encode(s: str, encoding: str) -> Union[bytes, None]:
@@ -243,3 +289,7 @@ def try_encode(s: str, encoding: str) -> Union[bytes, None]:
         return s.encode(encoding)
     except UnicodeEncodeError:
         return None
+
+
+def format_ip(ip_port: Tuple[str, int]) -> str:
+    return f"{ip_port[0]}:{ip_port[1]}"

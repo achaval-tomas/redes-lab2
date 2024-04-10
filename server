@@ -1,0 +1,2 @@
+#!/bin/bash
+kill -9 $(lsof -ti :19500) ; python3 server.py -p 19500

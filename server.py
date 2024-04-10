@@ -9,7 +9,7 @@
 import optparse
 import socket
 import sys
-import threading
+import select
 from connection import Connection
 from constants import DEFAULT_ADDR, DEFAULT_DIR, DEFAULT_PORT
 
@@ -28,25 +28,64 @@ class Server(object):
         self.port = port
         self.addr = addr
         self.dir = directory
+        self.connections = {}
+        self.poller = None
 
     def serve(self):
         """
         Loop principal del servidor. Se acepta una conexión a la vez
         y se espera a que concluya antes de seguir.
         """
+        self.socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         self.socket.bind((self.addr, self.port))
         self.socket.listen()
+
+        self.poller = select.poll()
+        self.poller.register(self.socket, select.POLLIN)
+
         while True:
-            (sock, _) = self.socket.accept()
-            thread = threading.Thread(target=self.create_connection,
-                                      args=(sock,))
-            # the comma is super necessary for it to be a tuple
+            events = self.poller.poll()
+            for sock_fd, event in events:
+                if not (event & (select.POLLIN | select.POLLOUT)):
+                    continue
 
-            thread.start()
+                if (event & select.POLLOUT):
+                    self.handle_pollout(sock_fd)
+                elif (event & select.POLLIN):
+                    if sock_fd == self.socket.fileno():
+                        # Server socket event
+                        self.handle_new_connection()
+                    else:
+                        self.handle_pollin(sock_fd)
 
-    def create_connection(self, socket):
-        connection = Connection(socket, self.dir)
-        connection.handle()
+    def handle_new_connection(self):
+        (new_sock, _) = self.socket.accept()
+        new_sock.setblocking(False)
+
+        self.poller.register(new_sock, select.POLLIN)
+        self.connections[new_sock.fileno()] = Connection(new_sock, self.dir)
+
+    def handle_pollin(self, sock_fd):
+        client = self.connections[sock_fd]
+
+        should_close_client = client.on_read_available()
+        if should_close_client:
+            self.poller.unregister(sock_fd)
+            self.connections.pop(sock_fd)
+            try:
+                client.close()
+            except OSError:
+                print('Transport endpoint not connected, connection closed.')
+        elif client.shoud_pollout():
+            self.poller.modify(sock_fd, select.POLLIN | select.POLLOUT)
+        else:
+            self.poller.modify(sock_fd, select.POLLIN)
+
+    def handle_pollout(self, sock_fd):
+        client = self.connections[sock_fd]
+        client.send()
+        if not client.shoud_pollout():
+            self.poller.modify(sock_fd, select.POLLIN)
 
 
 def main():
