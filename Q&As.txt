@@ -1,0 +1,8 @@
+Q1) ¿Qué estrategias existen para poder implementar este mismo servidor pero con capacidad de atender múltiples clientes simultáneamente? Investigue y responda brevemente qué cambios serían necesarios en el diseño del código.
+A1) Para ello podemos implementar multithreading (p.ej utilizando el módulo threading), polling (p.ej utilizando el módulo polling) o también utilizando async (p.ej con el módulo asyncIO). Los cambios principales en el código estarían en server.py:
+- Con threading, simplemente creamos un hilo por cada conexión entrante.
+- Con polling, utilizamos eventos para saber cuáles sockets tienen algo para leer o espacio para escribir sin bloquearse, y manejarlos adecuadamente.
+- Con async, escribimos funciones asíncronas que, a diferencia de las funciones secuenciales, utilizan una estrategia como polling para conseguir concurrencia en un mismo hilo.
+
+Q2) Pruebe ejecutar el servidor en una máquina del laboratorio, mientras utiliza el cliente desde otra, hacia la ip de la máquina servidor. ¿Qué diferencia hay si se corre el servidor desde la IP “localhost”, “127.0.0.1” o la ip “0.0.0.0”?
+A2) Si el server se corre en localhost o 127.0.0.1, sólo podemos conectarnos desde la misma máquina en la que se está ejecutando. Si en cambio utilizamos la IP 0.0.0.0, otras máquinas pueden conectarse al server.
